@@ -376,7 +376,7 @@ static ngx_http_variable_t  ngx_http_core_variables[] = {
     { ngx_string("arg_"), NULL, ngx_http_variable_argument,
       0, NGX_HTTP_VAR_NOCACHEABLE|NGX_HTTP_VAR_PREFIX, 0 },
 
-    { ngx_null_string, NULL, NULL, 0, 0, 0 }
+      ngx_http_null_variable
 };
 
 
@@ -1236,6 +1236,18 @@ ngx_http_variable_binary_remote_addr(ngx_http_request_t *r,
         v->no_cacheable = 0;
         v->not_found = 0;
         v->data = sin6->sin6_addr.s6_addr;
+
+        break;
+#endif
+
+#if (NGX_HAVE_UNIX_DOMAIN)
+    case AF_UNIX:
+
+        v->len = r->connection->addr_text.len;
+        v->valid = 1;
+        v->no_cacheable = 0;
+        v->not_found = 0;
+        v->data = r->connection->addr_text.data;
 
         break;
 #endif

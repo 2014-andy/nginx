@@ -1290,6 +1290,12 @@ ngx_stream_proxy_process_connection(ngx_event_t *ev, ngx_uint_t from_upstream)
     s = c->data;
     u = s->upstream;
 
+    if (c->close) {
+        ngx_log_error(NGX_LOG_INFO, c->log, 0, "shutdown timeout");
+        ngx_stream_proxy_finalize(s, NGX_STREAM_OK);
+        return;
+    }
+
     c = s->connection;
     pc = u->peer.connection;
 
@@ -1331,13 +1337,17 @@ ngx_stream_proxy_process_connection(ngx_event_t *ev, ngx_uint_t from_upstream)
                     return;
                 }
 
+                ngx_connection_error(pc, NGX_ETIMEDOUT, "upstream timed out");
+
                 if (u->received == 0) {
                     ngx_stream_proxy_next_upstream(s);
                     return;
                 }
+
+            } else {
+                ngx_connection_error(c, NGX_ETIMEDOUT, "connection timed out");
             }
 
-            ngx_connection_error(c, NGX_ETIMEDOUT, "connection timed out");
             ngx_stream_proxy_finalize(s, NGX_STREAM_OK);
             return;
         }
@@ -1665,11 +1675,15 @@ ngx_stream_proxy_next_upstream(ngx_stream_session_t *s)
     u = s->upstream;
     pc = u->peer.connection;
 
-    if (u->upstream_out || u->upstream_busy || (pc && pc->buffered)) {
+    if (pc && pc->buffered) {
         ngx_log_error(NGX_LOG_ERR, s->connection->log, 0,
-                      "pending buffers on next upstream");
+                      "buffered data on next upstream");
         ngx_stream_proxy_finalize(s, NGX_STREAM_INTERNAL_SERVER_ERROR);
         return;
+    }
+
+    if (s->connection->type == SOCK_DGRAM) {
+        u->upstream_out = NULL;
     }
 
     if (u->peer.sockaddr) {
